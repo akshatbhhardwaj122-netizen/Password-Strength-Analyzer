@@ -1,61 +1,91 @@
-import tkinter as tk
-from tkinter import ttk
+import customtkinter as CTk
 import re
+import math
 
-def check_strength(*args):
-    password = password_var.get()
-    strength = 0
-    remarks = ""
-    color = "#E74C3C"  # Default Red
+# Appearance Settings
+CTk.set_appearance_mode("dark")
+CTk.set_default_color_theme("blue")
 
-    if len(password) == 0:
-        strength_label.config(text="", bg="#F0F0F0")
-        progress['value'] = 0
-        return
+class StrengthAnalyzer(CTk.CTk):
+    def __init__(self):
+        super().__init__()
 
-    # Strength Logic
-    if len(password) >= 8: strength += 1
-    if re.search("[a-z]", password) and re.search("[A-Z]", password): strength += 1
-    if re.search("[0-9]", password): strength += 1
-    if re.search("[!@#$%^&*(),.?\":{}|<> ]", password): strength += 1
+        self.title("ShieldPass Pro")
+        self.geometry("450x450")
+        
+        # Grid layout
+        self.grid_columnconfigure(0, weight=1)
+        
+        # Header
+        self.label = CTk.CTkLabel(self, text="Password Analyzer", font=("Roboto", 24, "bold"))
+        self.label.pack(pady=(30, 10))
 
-    # Mapping Strength to UI
-    if strength == 1:
-        remarks, color = "Weak", "#E74C3C"
-    elif strength == 2:
-        remarks, color = "Fair", "#F1C40F"
-    elif strength == 3:
-        remarks, color = "Good", "#3498DB"
-    elif strength == 4:
-        remarks, color = "Strong", "#2ECC71"
+        # Password Entry & Toggle
+        self.entry_frame = CTk.CTkFrame(self, fg_color="transparent")
+        self.entry_frame.pack(pady=10)
 
-    progress['value'] = (strength / 4) * 100
-    strength_label.config(text=f"Strength: {remarks}", fg=color)
+        self.password_entry = CTk.CTkEntry(self.entry_frame, placeholder_text="Enter password...", 
+                                           width=300, height=45, show="*")
+        self.password_entry.grid(row=0, column=0, padx=(0, 10))
+        self.password_entry.bind("<KeyRelease>", self.update_ui)
 
-# Root window setup
-root = tk.Tk()
-root.title("ShieldPass Analyzer")
-root.geometry("400x250")
-root.configure(padx=20, pady=20)
+        self.show_pass = CTk.CTkCheckBox(self, text="Show Password", command=self.toggle_visibility)
+        self.show_pass.pack(pady=5)
 
-# UI Elements
-title_label = tk.Label(root, text="Password Strength Analyzer", font=("Helvetica", 14, "bold"))
-title_label.pack(pady=(0, 10))
+        # Progress Bar
+        self.meter = CTk.CTkProgressBar(self, width=350, height=12)
+        self.meter.set(0)
+        self.meter.pack(pady=20)
 
-password_var = tk.StringVar()
-password_var.trace_add("write", check_strength)
+        # Feedback Labels
+        self.status_label = CTk.CTkLabel(self, text="Enter a password to begin", font=("Roboto", 14))
+        self.status_label.pack()
 
-entry = tk.Entry(root, textvariable=password_var, show="*", font=("Helvetica", 12), width=30)
-entry.pack(pady=10)
+        self.entropy_label = CTk.CTkLabel(self, text="Entropy: 0 bits", font=("Roboto", 12), text_color="gray")
+        self.entropy_label.pack(pady=5)
 
-# Progress Bar (The "Meter")
-style = ttk.Style()
-style.theme_use('default')
-style.configure("TProgressbar", thickness=10)
-progress = ttk.Progressbar(root, orient="horizontal", length=250, mode="determinate", style="TProgressbar")
-progress.pack(pady=10)
+    def toggle_visibility(self):
+        if self.show_pass.get() == 1:
+            self.password_entry.configure(show="")
+        else:
+            self.password_entry.configure(show="*")
 
-strength_label = tk.Label(root, text="", font=("Helvetica", 11, "bold"))
-strength_label.pack()
+    def calculate_entropy(self, password):
+        if not password: return 0
+        pool = 0
+        if re.search("[a-z]", password): pool += 26
+        if re.search("[A-Z]", password): pool += 26
+        if re.search("[0-9]", password): pool += 10
+        if re.search(r"[^a-zA-Z0-9]", password): pool += 32
+        
+        # Formula: E = L * log2(R)
+        entropy = len(password) * math.log2(pool) if pool > 0 else 0
+        return round(entropy, 2)
 
-root.mainloop()
+    def update_ui(self, event=None):
+        password = self.password_entry.get()
+        entropy = self.calculate_entropy(password)
+        
+        # Update progress and colors based on entropy
+        # < 40: Weak | 40-60: Fair | 60-80: Good | 80+: Strong
+        progress_val = min(entropy / 100, 1.0)
+        self.meter.set(progress_val)
+        
+        self.entropy_label.configure(text=f"Entropy: {entropy} bits")
+
+        if entropy < 40:
+            self.meter.configure(progress_color="#E74C3C") # Red
+            self.status_label.configure(text="Strength: Weak", text_color="#E74C3C")
+        elif entropy < 65:
+            self.meter.configure(progress_color="#F1C40F") # Yellow
+            self.status_label.configure(text="Strength: Fair", text_color="#F1C40F")
+        elif entropy < 85:
+            self.meter.configure(progress_color="#3498DB") # Blue
+            self.status_label.configure(text="Strength: Good", text_color="#3498DB")
+        else:
+            self.meter.configure(progress_color="#2ECC71") # Green
+            self.status_label.configure(text="Strength: Strong", text_color="#2ECC71")
+
+if __name__ == "__main__":
+    app = StrengthAnalyzer()
+    app.mainloop()
